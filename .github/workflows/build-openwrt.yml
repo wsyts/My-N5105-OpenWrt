@@ -1,4 +1,4 @@
-name: Build N5105 OpenWrt Ultra
+name: Build N5105 OpenWrt Pro
 
 on:
   repository_dispatch:
@@ -17,7 +17,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Free disk space (清理磁盘空间)
+    - name: Free disk space (清理空间)
       uses: jlumbroso/free-disk-space@main
       with:
         tool-cache: false
@@ -46,63 +46,51 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH lede
         ln -sf /workdir/lede $GITHUB_WORKSPACE/lede
 
-    - name: Load custom feeds
+    - name: Load custom feeds (整合增强源)
       run: |
         cd lede
-        # 添加 Passwall 源
-        echo "src-git passwall https://github.com/xiaorouji/openwrt-passwall" >> ./feeds.conf.default
-        # 添加 iStore 商店和插件源 (通常由 LinkEase 提供)
-        echo "src-git istore https://github.com/Lienol/openwrt-package" >> ./feeds.conf.default
-        
+        # 添加全能插件源 (含 mosDNS, ddns-go, iStore等)
+        echo "src-git kenzo https://github.com/kenzok8/openwrt-packages" >> ./feeds.conf.default
+        echo "src-git small https://github.com/kenzok8/small" >> ./feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
     - name: Generate Config
       run: |
         cd lede
-        # 1. 目标硬件架构设置 (N5105 x86_64)
+        # 1. 硬件架构
         echo "CONFIG_TARGET_x86=y" >> .config
         echo "CONFIG_TARGET_x86_64=y" >> .config
         echo "CONFIG_TARGET_x86_64_DEVICE_generic=y" >> .config
         
-        # 2. 界面汉化与分区设置
+        # 2. 汉化与分区 (针对64G硬盘)
         echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
         echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
         echo "CONFIG_TARGET_KERNEL_PARTSIZE=64" >> .config
         echo "CONFIG_TARGET_ROOTFS_PARTSIZE=2048" >> .config
         
-        # 3. 基础必备插件 (Docker & 网卡)
+        # 3. 核心驱动
+        echo "CONFIG_PACKAGE_kmod-igc=y" >> .config
         echo "CONFIG_PACKAGE_luci-app-dockerman=y" >> .config
         echo "CONFIG_PACKAGE_luci-i18n-dockerman-zh-cn=y" >> .config
-        echo "CONFIG_PACKAGE_kmod-igc=y" >> .config
         
-        # 4. 原有插件 (Passwall, OpenClash, Tailscale)
-        echo "CONFIG_PACKAGE_luci-app-passwall=y" >> .config
-        echo "CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-openclash=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-tailscale=y" >> .config
-        echo "CONFIG_PACKAGE_luci-i18n-tailscale-zh-cn=y" >> .config
-        
-        # 5. 新增插件
-        # ARP 绑定 (Access Control)
+        # 4. 网络加速与工具
+        echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
         echo "CONFIG_PACKAGE_luci-app-access-control=y" >> .config
         echo "CONFIG_PACKAGE_luci-i18n-access-control-zh-cn=y" >> .config
-        # 易有云 (LinkEase)
-        echo "CONFIG_PACKAGE_luci-app-linkease=y" >> .config
-        echo "CONFIG_PACKAGE_luci-i18n-linkease-zh-cn=y" >> .config
-        # iStore 商店
-        echo "CONFIG_PACKAGE_luci-app-store=y" >> .config
-        echo "CONFIG_PACKAGE_luci-i18n-store-zh-cn=y" >> .config
-        # AdGuard Home
-        echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >> .config
-        echo "CONFIG_PACKAGE_luci-i18n-adguardhome-zh-cn=y" >> .config
-        # ddns-go
-        echo "CONFIG_PACKAGE_luci-app-ddns-go=y" >> .config
-        echo "CONFIG_PACKAGE_luci-i18n-ddns-go-zh-cn=y" >> .config
-        # mosDNS
-        echo "CONFIG_PACKAGE_luci-app-mosdns=y" >> .config
-        echo "CONFIG_PACKAGE_luci-i18n-mosdns-zh-cn=y" >> .config
         
+        # 5. 你的核心需求插件 (包含汉化)
+        echo "CONFIG_PACKAGE_luci-app-passwall=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-openclash=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-tailscale=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-ddns-go=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-mosdns=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-linkease=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-store=y" >> .config
+        
+        # 自动补全汉化包和依赖
+        sed -i 's/^[ \t]*//g' .config
         make defconfig
 
     - name: Download package
@@ -121,5 +109,5 @@ jobs:
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: OpenWrt_N5105_Full_Firmware
+        name: OpenWrt_N5105_Pro_Firmware
         path: lede/bin/targets/x86/64/*.img.gz
